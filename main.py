@@ -6,46 +6,49 @@ from pyrogram import Client, filters
 from pyrogram.errors import PeerIdInvalid, FloodWait
 from flask import Flask
 
-# API Credentials
+# API Credentials from Environment Variables
 API_ID = int(os.environ.get("API_ID"))
 API_HASH = os.environ.get("API_HASH")
 SESSION_STRING = os.environ.get("SESSION_STRING")
 
 app = Client("my_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# Dictionary to store last reply time
+# Dictionary to store last reply time for each user
 last_reply_time = {}
-REPLY_DELAY = 600  # 10 minutes delay
+REPLY_DELAY = 600  # 10 minutes (600 seconds)
 
-# --- FEATURE: AUTO REPLY WITH ERROR HANDLING ---
+# --- FEATURE: AUTO REPLY WITH CUSTOM MESSAGE ---
 @app.on_message(filters.private & ~filters.me)
 async def auto_reply(client, message):
     try:
         user_id = message.from_user.id
+        first_name = message.from_user.first_name
         current_time = time.time()
 
-        # 10-minute cooldown check
+        # Check for 10-minute cooldown
         if user_id in last_reply_time:
             if current_time - last_reply_time[user_id] < REPLY_DELAY:
                 return 
 
+        # --- AAPKA CUSTOM MESSAGE ---
         reply_text = (
-            "Hello! 👋\n\n"
-            "I am currently busy. I will reply as soon as I am online.\n\n"
-            "*Sent via Automated Assistant (10-min cooldown).*"
+            f"Hello {first_name}! 👋\n\n"
+            "I am currently busy or away from my phone. "
+            "I will get back to you as soon as I am online. 🙃\n\n"
+            "*Sent via Automated Assistant*"
         )
         
         await message.reply_text(reply_text)
+        
+        # Update last reply time
         last_reply_time[user_id] = current_time
 
     except (PeerIdInvalid, ValueError):
-        # Agar peer ID invalid hai toh ignore karo
         pass
     except FloodWait as e:
-        # Agar Telegram limit lagaye toh wait karo
         await asyncio.sleep(e.value)
     except Exception as e:
-        print(f"Error in auto_reply: {e}")
+        print(f"Auto-reply error: {e}")
 
 # --- FEATURE: QUICK REPLIES (.command) ---
 QUICK_REPLIES = {
@@ -64,7 +67,7 @@ async def quick_reply_handler(client, message):
 web_app = Flask(__name__)
 @web_app.route('/')
 def home():
-    return "Bot is stable and running!"
+    return "Bot is stable and running with your custom message!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
@@ -73,7 +76,7 @@ def run_web_server():
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
     try:
-        print("Bot is starting...")
+        print("Starting Bot with your custom message...")
         app.run()
     except Exception as e:
         print(f"Main Error: {e}")
