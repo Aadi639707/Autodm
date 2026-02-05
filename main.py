@@ -3,6 +3,7 @@ import time
 import asyncio
 import threading
 from pyrogram import Client, filters
+from pyrogram.errors import PeerIdInvalid, FloodWait
 from flask import Flask
 
 # API Credentials
@@ -12,40 +13,45 @@ SESSION_STRING = os.environ.get("SESSION_STRING")
 
 app = Client("my_userbot", api_id=API_ID, api_hash=API_HASH, session_string=SESSION_STRING)
 
-# Dictionary to store last reply time for each user
+# Dictionary to store last reply time
 last_reply_time = {}
+REPLY_DELAY = 600  # 10 minutes delay
 
-# Delay time in seconds (10 minutes = 600 seconds)
-REPLY_DELAY = 600
-
-# --- FEATURE 1: AUTO REPLY WITH 10 MIN DELAY ---
+# --- FEATURE: AUTO REPLY WITH ERROR HANDLING ---
 @app.on_message(filters.private & ~filters.me)
 async def auto_reply(client, message):
-    user_id = message.from_user.id
-    current_time = time.time()
+    try:
+        user_id = message.from_user.id
+        current_time = time.time()
 
-    # Check if we replied to this user recently
-    if user_id in last_reply_time:
-        if current_time - last_reply_time[user_id] < REPLY_DELAY:
-            return  # 10 min nahi hue, isliye reply nahi jayega
+        # 10-minute cooldown check
+        if user_id in last_reply_time:
+            if current_time - last_reply_time[user_id] < REPLY_DELAY:
+                return 
 
-    reply_text = (
-        "Hello! 👋\n\n"
-        "I am currently busy or away from my phone. "
-        "I will get back to you as soon as I am online.\n\n"
-        "*This is an automated response (sent once every 10 min).*"
-    )
-    
-    await message.reply_text(reply_text)
-    # Update the last reply time for this user
-    last_reply_time[user_id] = current_time
+        reply_text = (
+            "Hello! 👋\n\n"
+            "I am currently busy. I will reply as soon as I am online.\n\n"
+            "*Sent via Automated Assistant (10-min cooldown).*"
+        )
+        
+        await message.reply_text(reply_text)
+        last_reply_time[user_id] = current_time
 
-# --- FEATURE 2: QUICK REPLIES ---
+    except (PeerIdInvalid, ValueError):
+        # Agar peer ID invalid hai toh ignore karo
+        pass
+    except FloodWait as e:
+        # Agar Telegram limit lagaye toh wait karo
+        await asyncio.sleep(e.value)
+    except Exception as e:
+        print(f"Error in auto_reply: {e}")
+
+# --- FEATURE: QUICK REPLIES (.command) ---
 QUICK_REPLIES = {
-    ".hi": "Hello! How can I help you today?",
-    ".busy": "I'm in a meeting right now, will talk to you later.",
-    ".price": "I can build a professional website for you starting at just ₹100!",
-    ".ok": "Understood. I will get back to you on this shortly."
+    ".hi": "Hello! How can I help you?",
+    ".busy": "I'm busy right now, will talk later.",
+    ".price": "Websites start at just ₹100 for lifetime!",
 }
 
 @app.on_message(filters.me & filters.text)
@@ -56,10 +62,9 @@ async def quick_reply_handler(client, message):
 
 # --- WEB SERVER FOR RENDER ---
 web_app = Flask(__name__)
-
 @web_app.route('/')
 def home():
-    return "Bot is Running with 10-min Delay Feature!"
+    return "Bot is stable and running!"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 8080))
@@ -68,8 +73,8 @@ def run_web_server():
 if __name__ == "__main__":
     threading.Thread(target=run_web_server, daemon=True).start()
     try:
-        print("Bot starting with Delay Logic...")
+        print("Bot is starting...")
         app.run()
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Main Error: {e}")
         
